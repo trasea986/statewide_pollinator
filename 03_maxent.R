@@ -1,6 +1,7 @@
 library(terra)
 library(dismo)
 library(tidyverse)
+library(multcompView)
 # next is to run maxent.
 #give java extra memory
 options(java.parameters = "-Xmx4g" )
@@ -44,11 +45,11 @@ for (i in sp_ls) {
              'product=true',
              'threshold=true',
              'hinge=true',
-             'threads=6',
+             'threads=4',
              'responsecurves=true',
              'jackknife=true',
              'askoverwrite=false',
-             'replicates=10',
+             'replicates=4',
              'replicatetype=crossvalidate'),
            path = paste("./outputs/maxent/",i, sep =''))
 
@@ -56,11 +57,10 @@ for (i in sp_ls) {
 }
 
 #extract variable importance
-
 pi_table <- data.frame()
 
-rep_num <- c(1:10)
-
+#need number of reps and species for loops
+rep_num <- c(1:4)
 sp_num <- c(1:length(sp_ls))
 
 for(i in sp_num){
@@ -122,9 +122,30 @@ ggplot(auc_table, aes(x=value)) +
   labs(x = "Value", y = "Count") +
   theme_bw(base_size = 14)
 
-#next is the permutation importance for the different variables
-ggplot(pi_table_sorted_pub, aes(x = `BIOCLIM Number`, y = Permutation.Importance)) +
+#next is the permutation importance for the different variables with some stats
+pi_table_sorted_pub$`BIOCLIMNumber` <- as.factor(pi_table_sorted_pub$`BIOCLIM Number`)
+
+anova <- aov(data = pi_table_sorted_pub, Permutation.Importance ~ `BIOCLIMNumber`)
+tukey <- TukeyHSD(anova)
+cld <- multcompLetters4(anova, tukey)
+
+# table with factors and 3rd quantile
+Tk <- pi_table_sorted_pub %>% group_by(BIOCLIMNumber) %>%
+  summarise(mean=mean(Permutation.Importance), quant = quantile(Permutation.Importance, probs = 0.75)) %>%
+  arrange(desc(mean))
+
+# extracting the compact letter display and adding to the Tk table
+cld <- as.data.frame.list(cld$BIOCLIMNumber)
+Tk$cld <- cld$Letters
+
+ggplot(pi_table_sorted_pub, aes(x = BIOCLIMNumber, y = Permutation.Importance)) +
   geom_boxplot() +
   geom_point()+
   labs(x = "BIOCLIM Variable", y = "Permutation Importance") +
-  theme_classic(base_size = 14)
+  theme_classic(base_size = 14) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_text(data = Tk, aes(x = BIOCLIMNumber, y = quant, label = cld), size = 3, vjust=-1, hjust =-1)
+
+#last is visualize maxent models
+output_predict <- predict(predictors_final, MaxEnt_list[[1]]@models[[1]], progress='text')
+plot(output_predict)

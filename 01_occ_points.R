@@ -44,7 +44,7 @@ bee_sum <- bee_data %>%
   arrange(desc(n))
 
 #take top 10
-bees_common <- bee_sum[1:2,]
+bees_common <- bee_sum[1:36,]
 bees_common <- bees_common$Species
 
 #sort the location data for just those bees
