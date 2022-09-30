@@ -15,6 +15,10 @@ library(readxl)
 bee_netting <- read.csv("data/XYBeeData_27_Sept_2022_netting.csv")
 bee_passive <- read.csv("data/XYBeeData_27_Sept_2022_passive.csv")
 
+#need to remove males
+bee_netting <- bee_netting %>% filter(Male. != 'x')
+bee_passive <- bee_passive %>% filter(Male. != 'x')
+
 
 #note only need a few columns
 bee_netting <- as.data.frame(cbind('X' = bee_netting$X_Site, 'Y' = bee_netting$Y_Site, 'Species' = bee_netting$Bee.Species, 'Count' = bee_netting$Bee.Count))

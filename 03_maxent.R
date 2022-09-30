@@ -10,6 +10,7 @@ predictors_final <- rast('./outputs/predictors_final.tiff')
 bee_occ <- read.csv('./outputs/bee_occ.csv')
 
 #list of species
+bee_occ$Species <- as.factor(bee_occ$Species)
 sp_ls <- levels(bee_occ$Species)
 
 #turn the spatraster to rast for maxent
@@ -28,8 +29,6 @@ for (i in sp_ls) {
   points <- bee_occ %>%
     dplyr::filter(Species == i) %>%
     dplyr::select(X, Y)
-  
-  points = points[,2:3]
 
   output_model <-
     maxent(x=predictors_final,
@@ -56,34 +55,76 @@ for (i in sp_ls) {
   MaxEnt_list[[i]] <- output_model
 }
 
-i = sp_ls[1]
+#extract variable importance
 
-points <- bee_occ %>%
-  dplyr::filter(Species == i) %>%
-  dplyr::select(X, Y)
+pi_table <- data.frame()
 
-points = points[,2:3]
+rep_num <- c(1:10)
 
-output_model <-
-  maxent(x=predictors_final,
-         p=points,
-         removeDuplicates=TRUE, args=c(
-           'maximumbackground=10000',
-           'defaultprevalence=1.00',
-           'betamultiplier=1',
-           'plots=true',
-           'pictures=true',
-           'linear=true',
-           'quadratic=true',
-           'product=true',
-           'threshold=true',
-           'hinge=true',
-           'threads=6',
-           'responsecurves=true',
-           'jackknife=true',
-           'askoverwrite=false',
-           'replicates=10',
-           'replicatetype=crossvalidate'),
-         path = paste("./outputs/maxent/",i, sep =''))
+sp_num <- c(1:length(sp_ls))
 
-MaxEnt_list[[i]] <- output_model
+for(i in sp_num){
+  for(j in rep_num){
+  pi1 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_10.permutation.importance',]
+  pi2 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_13.permutation.importance',]
+  pi3 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_15.permutation.importance',]
+  pi4 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_16.permutation.importance',]
+  pi5 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_7.permutation.importance',]
+  pi6 <- MaxEnt_list[[i]]@models[[j]]@results['wc2.1_2.5m_bio_8.permutation.importance',]
+  
+  
+  pi_table_part <- data.frame(value = c(pi1, pi2, pi3, pi4, pi5, pi6), var = c('wc2.1_2.5m_bio_10.permutation.importance','wc2.1_2.5m_bio_13.permutation.importance','wc2.1_2.5m_bio_15.permutation.importance','wc2.1_2.5m_bio_16.permutation.importance','wc2.1_2.5m_bio_7.permutation.importance','wc2.1_2.5m_bio_8.permutation.importance'))
+  
+  pi_table_part$Species <- paste(sp_ls[i])
+  
+  pi_table_part$Replicate <- paste(j)
+  
+  pi_table <- rbind(pi_table, pi_table_part)
+  }}
+
+auc_table <- data.frame()
+
+for(i in sp_num){
+  for(j in rep_num){
+    auc_train <- MaxEnt_list[[i]]@models[[j]]@results['Training.AUC',]
+    auc_test <- MaxEnt_list[[i]]@models[[j]]@results['Test.AUC',]
+    
+    auc_table_part <- data.frame(value = c(auc_train, auc_test), var = c('AUC Train', 'AUC Test'))
+    
+    auc_table_part$Species <- paste(sp_ls[i])
+    
+    auc_table_part$Replicate <- paste(j)
+    
+    auc_table <- rbind(auc_table, auc_table_part)
+  }}
+
+
+#sort to highlight / look for consistent
+pi_table_sorted <- pi_table %>%
+  arrange(Species, desc(value))
+
+#make things prettier for pub table
+pi_table_sorted_pub <- data.frame(Species = pi_table_sorted$Species, var = pi_table_sorted$var, `Permutation Importance` = pi_table_sorted$value)
+pi_table_sorted_pub <- pi_table_sorted_pub %>% separate(var, c('junk1', 'junk2', 'junk3', 'BIOCLIM Number'), sep = "_")
+pi_table_sorted_pub <- pi_table_sorted_pub %>% separate(`BIOCLIM Number`, c('BIOCLIM Number', 'junk4', 'junk5'), sep = "\\.")
+pi_table_sorted_pub$junk1 <- NULL
+pi_table_sorted_pub$junk2 <- NULL
+pi_table_sorted_pub$junk3 <- NULL
+pi_table_sorted_pub$junk4 <- NULL
+pi_table_sorted_pub$junk5 <- NULL
+
+#best thing to do is visualize though - looking at the histogram of the AUC values
+ggplot(auc_table, aes(x=value)) + 
+  geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 12)+
+  #geom_density(alpha=.2, fill="#FF6666") +
+  facet_wrap(~var) +
+  scale_x_continuous(limits=c(.4, 1)) +
+  labs(x = "Value", y = "Count") +
+  theme_bw(base_size = 14)
+
+#next is the permutation importance for the different variables
+ggplot(pi_table_sorted_pub, aes(x = `BIOCLIM Number`, y = Permutation.Importance)) +
+  geom_boxplot() +
+  geom_point()+
+  labs(x = "BIOCLIM Variable", y = "Permutation Importance") +
+  theme_classic(base_size = 14)

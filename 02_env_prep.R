@@ -52,4 +52,3 @@ bio_names <- names(predictors_final)
 
 #save
 terra::writeRaster(predictors_final, './outputs/predictors_final.tiff', filetype = 'GTiff',names = bio_names, overwrite=TRUE)
-
