@@ -56,6 +56,9 @@ for (i in sp_ls) {
   MaxEnt_list[[i]] <- output_model
 }
 
+#save list
+saveRDS(MaxEnt_list, './outputs/maxent/all_sp_runs.rds')
+
 #extract variable importance
 pi_table <- data.frame()
 
