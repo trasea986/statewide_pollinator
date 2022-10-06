@@ -65,7 +65,7 @@ write.csv(bee_occ, './outputs/bee_occ.csv', row.names = FALSE)
 
 #to plot map of the sample sizes by species
 plot_df <- bee_occ %>% 
-  dplyr::filter(Species == 'Apis mellifera' | Species == 'Lasioglossum albipenne') %>%
+  dplyr::filter(Species == 'Agapostemon virescens' | Species == 'Lasioglossum albipenne') %>%
   dplyr::filter(n > 14)
 
 #drop unused levels
@@ -102,17 +102,33 @@ nlcd_legend$ï..labels <- NULL
 #need to add unclassified
 nlcd_legend2 <- rbind(data.frame(colors = '0000ffff', value = 'Unclassified'), nlcd_legend)
 
+#remove pren snow and ice
+nlcd_legend2 <- nlcd_legend2[c(-3),]
+
 #fix projection issue
 nlcd_plot2 <- terra::project(nlcd_plot, counties)
 
 #although labels are correct, the colors are not quite right from that csv I found online, maybe an older version of nlcd
-nlcd_legend3 <- data.frame(nlcd_legend2$value, colors = c('0000ffff', '#486da2', '#e7effc', '#e1cdce', '#dc9881', '#f10100', '#ad0101', '#b3afa4', '#6ba966','#1d6533', '#bdcc93', '#d1bb82','#edeccd', '#ddd83e','#ae7229','#bbd7ed', '#71a4c1'))
+#pull out from second position perrenial snow/ice
+#also change herbaceous to a slightly more green color original was '#edeccd'
+nlcd_legend3 <- data.frame(nlcd_legend2$value, colors = c('0000ffff', '#486da2', '#e1cdce', '#dc9881', '#f10100', '#ad0101', '#b3afa4', '#6ba966','#1d6533', '#bdcc93', '#d1bb82','#a4cc51', '#ddd83e','#ae7229','#bbd7ed', '#71a4c1'))
+
+#bring in REC
+rec <- read.csv('./data/rec_sites.csv', fileEncoding = 'UTF-8-BOM')
+
+#crop the nlcd to better match the counties file
+nlcd_plot3 <- mask(nlcd_plot2, counties)
+
+#this version doesn't have 'unclassified'
+nlcd_legend3 <- nlcd_legend3[c(-1),]
 
 #plot by species
 ggplot() +
-  geom_spatraster(data = nlcd_plot2) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
+  geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
   tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
-  geom_point(data = plot_df, aes(x = X, y = Y, color = Species)) +
+  geom_point(data = plot_df, aes(x = X, y = Y, color = Species), size = 2.5) +
   geom_label_repel(data = plot_df, aes(x = X, y = Y, label = n, color = Species), min.segment.length = 0.05, size = 3, force = 10, max.overlaps = 30) +
+  geom_point(data = rec, aes(x = Longitude, y = Latitude), fill = 'black', size = 7, pch = 23) +
+  geom_label_repel(data = rec, aes(x = Longitude, y = Latitude, label = Location), size = 4, color = 'black', min.segment.length = 0, size = 3, force = 50) +
   scale_colour_manual(values=c('darkgreen', 'blue')) +
-  theme_bw()
+  theme_void()
