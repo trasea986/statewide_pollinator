@@ -9,13 +9,13 @@ library(ggthemes)
 library(sf)
 library(tidyverse)
 library(conflicted)
-library(readxl)
 library(terra)
 library(tidyterra)
 library(ggrepel)
 #note that older version of feddata has missing tile issue. dev says to pull dev version
-devtools::install_github("ropensci/FedData")
+#devtools::install_github("ropensci/FedData")
 library(FedData)
+library(ggspatial)
 
 #read in net and traps and then combine after adding row for collection type
 bee_netting <- read.csv("data/XYBeeData_27_Sept_2022_netting.csv")
@@ -61,15 +61,7 @@ bee_occ$Species <- as.factor(bee_occ$Species)
 bee_occ$X <- as.numeric(bee_occ$X)
 bee_occ$Y <- as.numeric(bee_occ$Y)
 
-write.csv(bee_occ, './outputs/bee_occ.csv', row.names = FALSE)
-
-#to plot map of the sample sizes by species
-plot_df <- bee_occ %>% 
-  dplyr::filter(Species == 'Agapostemon virescens' | Species == 'Lasioglossum albipenne') %>%
-  dplyr::filter(n > 14)
-
-#drop unused levels
-plot_df <- droplevels(plot_df)
+#write.csv(bee_occ, './outputs/bee_occ.csv', row.names = FALSE)
 
 #bring in county map
 counties <- vect('./data/County_Boundaries.shp')
@@ -100,7 +92,7 @@ nlcd_legend$value <- nlcd_legend$ï..labels
 nlcd_legend$ï..labels <- NULL
 
 #need to add unclassified
-nlcd_legend2 <- rbind(data.frame(colors = '0000ffff', value = 'Unclassified'), nlcd_legend)
+nlcd_legend2 <- rbind(data.frame(colors = '0000ffff', labels = 'Unclassified'), nlcd_legend)
 
 #remove pren snow and ice
 nlcd_legend2 <- nlcd_legend2[c(-3),]
@@ -111,7 +103,10 @@ nlcd_plot2 <- terra::project(nlcd_plot, counties)
 #although labels are correct, the colors are not quite right from that csv I found online, maybe an older version of nlcd
 #pull out from second position perrenial snow/ice
 #also change herbaceous to a slightly more green color original was '#edeccd'
-nlcd_legend3 <- data.frame(nlcd_legend2$value, colors = c('0000ffff', '#486da2', '#e1cdce', '#dc9881', '#f10100', '#ad0101', '#b3afa4', '#6ba966','#1d6533', '#bdcc93', '#d1bb82','#a4cc51', '#ddd83e','#ae7229','#bbd7ed', '#71a4c1'))
+nlcd_legend3 <- data.frame(nlcd_legend2$labels, colors = c('0000ffff', '#486da2', '#e1cdce', '#dc9881', '#f10100', '#ad0101', '#b3afa4', '#6ba966','#1d6533', '#bdcc93', '#d1bb82','#a4cc51', '#ddd83e','#ae7229','#bbd7ed', '#71a4c1'))
+
+#quick rename
+nlcd_legend3$value <- nlcd_legend3$labels
 
 #bring in REC
 rec <- read.csv('./data/rec_sites.csv', fileEncoding = 'UTF-8-BOM')
@@ -122,13 +117,68 @@ nlcd_plot3 <- mask(nlcd_plot2, counties)
 #this version doesn't have 'unclassified'
 nlcd_legend3 <- nlcd_legend3[c(-1),]
 
+#to plot map of the sample sizes by species
+#other bombus: | Species == 'Bombus fervidus'  | Species == 'Bombus rufocinctus'
+plot_df <- bee_occ %>% 
+  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis'  | Species == 'Bombus borealis') %>%
+  dplyr::filter(n > 5)
+
+#drop unused levels
+plot_df <- droplevels(plot_df)
+
 #plot by species
 ggplot() +
   geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
   tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
   geom_point(data = plot_df, aes(x = X, y = Y, color = Species), size = 2.5) +
-  geom_label_repel(data = plot_df, aes(x = X, y = Y, label = n, color = Species), min.segment.length = 0.05, size = 3, force = 10, max.overlaps = 30) +
-  geom_point(data = rec, aes(x = Longitude, y = Latitude), fill = 'black', size = 7, pch = 23) +
-  geom_label_repel(data = rec, aes(x = Longitude, y = Latitude, label = Location), size = 4, color = 'black', min.segment.length = 0, size = 3, force = 50) +
-  scale_colour_manual(values=c('darkgreen', 'blue')) +
-  theme_void()
+  geom_label_repel(data = plot_df, aes(x = X, y = Y, label = n, color = Species), min.segment.length = 0.05, size = 3, force = 10, max.overlaps = 100) +
+  #these two add the RECs, but because focus likely NE ND, not needed
+  #geom_point(data = rec, aes(x = Longitude, y = Latitude), fill = 'black', size = 7, pch = 23) +
+  #geom_label_repel(data = rec, aes(x = Longitude, y = Latitude, label = Location), size = 4, color = 'black', min.segment.length = 0, size = 3, force = 50) +
+  annotation_scale(location = c("bl"))+
+  scale_colour_manual(values=c('darkgreen', 'blue', 'purple', "orange", "darkred")) +
+  facet_wrap(~Species, nrow = 2) +
+  #xlim(c(-100.4815, -96.52885))+
+  #ylim(c(47.46399, 49.22939))+
+  theme_void(base_size = 16)
+
+ggsave('./outputs/sample_size_3sp.png', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
+
+#pull out list by filtering within those limits
+proposed_samples <- bee_occ %>% 
+  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis')%>% #  | Species == 'Bombus borealis') %>%
+  dplyr::filter(n >= 7) %>%
+  dplyr::filter(X > -100.4815 && X < -96.52885) %>%
+  dplyr::filter(Y > 47.46399) # && Y < 48.488497)
+
+sum(proposed_samples$n) #514 total samples
+
+#add column that takes the max number of samples we may be interested in
+proposed_samples$n_seq <- with(proposed_samples, ifelse(n > 10, 10, n))
+
+sum(proposed_samples$n_seq) #294! total samples
+
+p1 <- ggplot() +
+  geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
+  tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
+  geom_point(data = proposed_samples, aes(x = X, y = Y, color = Species), size = 2.5) +
+  geom_label_repel(data = proposed_samples, aes(x = X, y = Y, label = n_seq, color = Species), min.segment.length = 0.05, size = 3, force = 10, max.overlaps = 100) +
+  #these two add the RECs, but because focus likely NE ND, not needed
+  #geom_point(data = rec, aes(x = Longitude, y = Latitude), fill = 'black', size = 7, pch = 23) +
+  #geom_label_repel(data = rec, aes(x = Longitude, y = Latitude, label = Location), size = 4, color = 'black', min.segment.length = 0, size = 3, force = 50) +
+  annotation_scale(location = c("bl"))+
+  scale_colour_manual(values=c('darkgreen', 'blue', 'purple', "orange", "darkred")) +
+  facet_wrap(~Species, nrow = 2) +
+  xlim(c(-100.4815, -96.52885))+
+  ylim(c(47.46399, 49.22939))+
+  theme_void(base_size = 16)
+
+ggsave('./outputs/sample_size.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
+
+proposed_samples %>%
+  group_by(Species) %>%
+  summarize(average_pop = mean(n_seq))
+
+proposed_samples %>%
+  group_by(Species) %>%
+  tally()
