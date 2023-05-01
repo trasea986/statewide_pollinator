@@ -49,6 +49,11 @@ bee_sum <- bee_data %>%
   tally() %>%
   arrange(desc(n))
 
+bee_data %>%
+  group_by(Species) %>%
+  tally() %>%
+  nrow()
+
 #take top 10
 bees_common <- bee_sum[1:36,]
 bees_common <- bees_common$Species
@@ -120,14 +125,15 @@ nlcd_legend3 <- nlcd_legend3[c(-1),]
 #to plot map of the sample sizes by species
 #other bombus: | Species == 'Bombus fervidus'  | Species == 'Bombus rufocinctus'
 plot_df <- bee_occ %>% 
-  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis'  | Species == 'Bombus borealis') %>%
-  dplyr::filter(n > 5)
+  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis') %>%
+  #  | Species == 'Bombus borealis') %>%
+  dplyr::filter(n > 3)
 
 #drop unused levels
 plot_df <- droplevels(plot_df)
 
 #plot by species
-ggplot() +
+p1 <- ggplot() +
   geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
   tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
   geom_point(data = plot_df, aes(x = X, y = Y, color = Species), size = 2.5) +
@@ -142,7 +148,7 @@ ggplot() +
   #ylim(c(47.46399, 49.22939))+
   theme_void(base_size = 16)
 
-ggsave('./outputs/sample_size_3sp.png', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
+ggsave('./outputs/sample_size_all_sites.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
 
 #pull out list by filtering within those limits
 proposed_samples <- bee_occ %>% 
