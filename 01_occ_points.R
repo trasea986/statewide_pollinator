@@ -1,5 +1,5 @@
 #for bringing in points, starting with just CK's ND data, but could expand to include gbif at a later date.
-
+#test
 library(rnaturalearthdata)
 library(rnaturalearth)
 library(dismo)
@@ -125,15 +125,15 @@ nlcd_legend3 <- nlcd_legend3[c(-1),]
 #to plot map of the sample sizes by species
 #other bombus: | Species == 'Bombus fervidus'  | Species == 'Bombus rufocinctus'
 plot_df <- bee_occ %>% 
-  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis') %>%
+  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis') #%>%
   #  | Species == 'Bombus borealis') %>%
-  dplyr::filter(n > 3)
+  #dplyr::filter(n > 10)
 
 #drop unused levels
 plot_df <- droplevels(plot_df)
 
 #plot by species
-p1 <- ggplot() +
+ggplot() +
   geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
   tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
   geom_point(data = plot_df, aes(x = X, y = Y, color = Species), size = 2.5) +
@@ -148,38 +148,35 @@ p1 <- ggplot() +
   #ylim(c(47.46399, 49.22939))+
   theme_void(base_size = 16)
 
-ggsave('./outputs/sample_size_all_sites.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
+#ggsave('./outputs/sample_size_all_sites.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
 
 #pull out list by filtering within those limits
 proposed_samples <- bee_occ %>% 
-  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis')%>% #  | Species == 'Bombus borealis') %>%
+  dplyr::filter(Species == 'Bombus ternarius' | Species == 'Bombus griseocollis')%>% # if wanting sp 3  | Species == 'Bombus borealis') %>%
   dplyr::filter(n >= 7) %>%
   dplyr::filter(X > -100.4815 && X < -96.52885) %>%
-  dplyr::filter(Y > 47.46399) # && Y < 48.488497)
+  dplyr::filter(Y > 47.46399 && Y < 49.488497)
 
 sum(proposed_samples$n) #514 total samples
 
 #add column that takes the max number of samples we may be interested in
-proposed_samples$n_seq <- with(proposed_samples, ifelse(n > 10, 10, n))
+proposed_samples$n_seq <- with(proposed_samples, ifelse(n > 20, 20, n))
 
 sum(proposed_samples$n_seq) #294! total samples
 
-p1 <- ggplot() +
+ggplot() +
   geom_spatraster(data = nlcd_plot3) + scale_fill_manual(values = nlcd_legend3$colors, na.value = NA)+ 
   tidyterra::geom_spatvector(data = counties, fill = NA, colour = "black", size = 0.75)+
   geom_point(data = proposed_samples, aes(x = X, y = Y, color = Species), size = 2.5) +
   geom_label_repel(data = proposed_samples, aes(x = X, y = Y, label = n_seq, color = Species), min.segment.length = 0.05, size = 3, force = 10, max.overlaps = 100) +
-  #these two add the RECs, but because focus likely NE ND, not needed
-  #geom_point(data = rec, aes(x = Longitude, y = Latitude), fill = 'black', size = 7, pch = 23) +
-  #geom_label_repel(data = rec, aes(x = Longitude, y = Latitude, label = Location), size = 4, color = 'black', min.segment.length = 0, size = 3, force = 50) +
   annotation_scale(location = c("bl"))+
   scale_colour_manual(values=c('darkgreen', 'blue', 'purple', "orange", "darkred")) +
   facet_wrap(~Species, nrow = 2) +
-  xlim(c(-100.4815, -96.52885))+
-  ylim(c(47.46399, 49.22939))+
+  #xlim(c(-101, -96.5544916699999))+
+  #ylim(c(47, 49.000594494))+
   theme_void(base_size = 16)
 
-ggsave('./outputs/sample_size.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
+#ggsave('./outputs/sample_size.jpeg', p1, units = 'in', dpi = 1200, width = 11, height = 8.5)
 
 proposed_samples %>%
   group_by(Species) %>%
@@ -188,3 +185,40 @@ proposed_samples %>%
 proposed_samples %>%
   group_by(Species) %>%
   tally()
+
+sum(proposed_samples$n_seq)
+
+proposed_samples %>%
+  group_by(Species) %>%
+  summarize(total_samp = sum(n_seq))
+
+
+#check variation in environment
+#load raster and clip
+#create list of env data
+bio_files <- list.files(path = './data/wc2.1_2.5m_bio', pattern = '*.tif', all.files = TRUE, full.names = TRUE)
+
+#load in the rasters
+bio_layers <- rast(bio_files)
+
+#load ND shapefile from TIGER for extent
+nd <- vect('./data/tl_2016_38_place.shp')
+bio_layers <- crop(bio_layers, nd)
+
+#extract values across the state
+extracted_df <- terra::extract(bio_layers, proposed_samples[,2:3])
+
+#min, max, mean
+summary_df1 <- extracted_df[,-1] %>%
+  summarize_all(mean)
+summary_df1$calc <- "Mean"
+summary_df2 <- extracted_df[,-1] %>%
+  summarize_all(min)
+summary_df2$calc <- "Min"
+summary_df3 <- extracted_df[,-1] %>%
+  summarize_all(max)
+summary_df3$calc <- "Max"
+summary_df_final <- rbind(summary_df1, summary_df2, summary_df3)
+
+#note that I ran two versions of this, one with NE ('small') and one over the whole state to compare in Excel quickly
+write.csv(summary_df_final, file = "./outputs/summary_env_small.csv", row.names = FALSE)
